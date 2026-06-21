@@ -1,24 +1,18 @@
 """
-视频下载器 - 移动端精简版
-支持: 抖音/B站/小红书/微博 + yt-dlp 通用
-去掉 Playwright 依赖，纯 HTTP 请求
+视频下载器 - 移动端精简版 v2
+支持: 回森/快手/抖音/B站/小红书/微博 + yt-dlp 通用
+智能路由：自动识别平台 → 对应解析器 → 降级通用
 """
 import os
-import sys
 import re
-import json
 import time
-import shutil
-import subprocess
-from pathlib import Path
-from urllib.parse import urlparse
-
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from parsers.huison import HuisonParser
 from parsers.douyin import DouyinParser
+from parsers.kuaishou import KuaishouParser
 from parsers.bilibili import BilibiliParser
 from parsers.xiaohongshu import XiaohongshuParser
 from parsers.weibo import WeiboParser
-from parsers.kuaishou import KuaishouParser
 from parsers.generic import GenericParser
 
 app = Flask(__name__)
@@ -33,21 +27,90 @@ def safe_content_disposition(filename: str) -> str:
     return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
 
 
+# ── 解析器注册（按优先级排序）──
 PARSERS = [
-    DouyinParser(),
-    BilibiliParser(),
-    XiaohongshuParser(),
-    KuaishouParser(),
-    WeiboParser(),
-    GenericParser(),
+    HuisonParser(),     # 回森
+    DouyinParser(),     # 抖音/TikTok
+    KuaishouParser(),   # 快手
+    BilibiliParser(),   # B站
+    XiaohongshuParser(),# 小红书
+    WeiboParser(),      # 微博
+]
+GENERIC = GenericParser()
+
+
+# ── 智能平台检测 ──────────────────────────────────────
+PLATFORM_PATTERNS = [
+    # (正则匹配, 解析器名称, 中文名)
+    (r'(viviv\.com|getkwai\.com)', 'huison', '回森'),
+    (r'(douyin\.com|iesdouyin\.com|v\.douyin\.com)', 'douyin', '抖音'),
+    (r'(tiktok\.com|vm\.tiktok\.com)', 'douyin', 'TikTok'),
+    (r'(kuaishou\.com|gifshow\.com|chenzhongtech\.com)', 'kuaishou', '快手'),
+    (r'(bilibili\.com|b23\.tv|bilivideo\.com)', 'bilibili', 'B站'),
+    (r'(xiaohongshu\.com|xhslink\.com|xhs\.com)', 'xiaohongshu', '小红书'),
+    (r'(weibo\.com|weibo\.cn|m\.weibo\.com)', 'weibo', '微博'),
 ]
 
+PARSER_MAP = {
+    'huison': HuisonParser,
+    'douyin': DouyinParser,
+    'kuaishou': KuaishouParser,
+    'bilibili': BilibiliParser,
+    'xiaohongshu': XiaohongshuParser,
+    'weibo': WeiboParser,
+}
 
-def get_parser(url: str):
-    for p in PARSERS:
-        if p.match(url):
-            return p
-    return GenericParser()
+
+def detect_platform(url: str) -> tuple:
+    """检测 URL 对应的平台，返回 (platform_key, platform_name)"""
+    for pattern, key, name in PLATFORM_PATTERNS:
+        if re.search(pattern, url, re.I):
+            return key, name
+    return None, None
+
+
+def parse_with_fallback(url: str) -> dict:
+    """
+    智能解析流程：
+    1. 检测平台 → 用对应解析器
+    2. 失败 → 遍历其他解析器
+    3. 全失败 → yt-dlp 兜底
+    """
+    platform_key, platform_name = detect_platform(url)
+    errors = []
+
+    # Step 1: 优先用检测到的平台解析器
+    if platform_key and platform_key in PARSER_MAP:
+        parser = PARSER_MAP[platform_key]()
+        try:
+            result = parser.parse(url)
+            result["parser"] = parser.name
+            return result
+        except Exception as e:
+            errors.append(f"{parser.name}: {str(e)}")
+
+    # Step 2: 遍历所有解析器
+    for parser in PARSERS:
+        if platform_key and parser.name == platform_name:
+            continue  # 已经试过了
+        if parser.match(url):
+            try:
+                result = parser.parse(url)
+                result["parser"] = parser.name
+                return result
+            except Exception as e:
+                errors.append(f"{parser.name}: {str(e)}")
+
+    # Step 3: yt-dlp 兜底
+    try:
+        result = GENERIC.parse(url)
+        result["parser"] = GENERIC.name
+        return result
+    except Exception as e:
+        errors.append(f"通用: {str(e)}")
+
+    # 全部失败
+    raise RuntimeError("解析失败:\n" + "\n".join(errors))
 
 
 def extract_urls(text: str) -> list:
@@ -55,6 +118,8 @@ def extract_urls(text: str) -> list:
     urls = re.findall(pattern, text)
     return list(dict.fromkeys(urls))
 
+
+# ── 路由 ──────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -68,9 +133,7 @@ def parse_url():
     if not url:
         return jsonify({"error": "请输入链接"}), 400
     try:
-        parser = get_parser(url)
-        result = parser.parse(url)
-        result["parser"] = parser.name
+        result = parse_with_fallback(url)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -87,9 +150,7 @@ def batch_parse():
     results = []
     for url in urls:
         try:
-            parser = get_parser(url)
-            result = parser.parse(url)
-            result["parser"] = parser.name
+            result = parse_with_fallback(url)
             result["url"] = url
             results.append(result)
         except Exception as e:
@@ -118,7 +179,6 @@ def download_proxy():
         "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
                       "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
     }
-
     extra_cookies = data.get("_cookies", "")
     extra_referer = data.get("_referer", "")
     if extra_cookies:
@@ -154,6 +214,6 @@ if __name__ == "__main__":
     import sys, io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     port = int(os.environ.get("PORT", 5000))
-    print(f"[启动] 视频下载器 移动端 v1.0")
+    print(f"[启动] 视频下载器 移动端 v2.0")
     print(f"[地址] http://0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)
