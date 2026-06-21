@@ -261,6 +261,8 @@ async function doDownload(url, title, type, btn) {
     const orig = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 下载中...';
     try {
+        let filename = title + (type==='video'?'.mp4':'.m4a');
+
         if (url.startsWith('blob:')) {
             // blob URL: 浏览器端直接 fetch
             const resp = await fetch(url);
@@ -268,11 +270,14 @@ async function doDownload(url, title, type, btn) {
             const blob = await resp.blob();
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = title + (type==='video'?'.mp4':'.m4a');
+            a.download = filename;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
+        } else if (window.Android && Android.download) {
+            // Android WebView: 通过 JS Bridge 调用原生下载管理器
+            Android.download(url, filename);
         } else {
-            // 普通 URL: 用 form 提交，让 WebView 原生处理下载
+            // 其他环境: form 提交下载
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = API + '/api/download';
