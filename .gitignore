@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+android/
+*.apk
+.huison_debug.log
+service.log
+.git/

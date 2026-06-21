@@ -1,0 +1,4 @@
+flask>=2.0
+requests>=2.25
+gunicorn>=21.2.0
+yt-dlp>=2024.1.0

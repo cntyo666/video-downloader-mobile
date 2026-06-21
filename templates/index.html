@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f13">
+<title>🎬 视频下载器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root {
+    --bg: #0f0f13; --card: #1a1a24; --border: #2a2a3a;
+    --accent: #6c5ce7; --accent2: #a29bfe; --text: #e8e8f0;
+    --text2: #8888aa; --success: #00cec9; --error: #ff6b6b;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+html { height: 100%; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100%;
+    padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+    -webkit-font-smoothing: antialiased;
+}
+.container { max-width: 100%; padding: 16px; }
+
+/* Header */
+.header {
+    text-align: center; padding: 24px 0 16px;
+    background: linear-gradient(180deg, rgba(108,92,231,0.12) 0%, transparent 100%);
+}
+.header h1 { font-size: 1.6em; font-weight: 700; }
+.header h1 span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header p { color: var(--text2); font-size: 0.85em; margin-top: 4px; }
+.platforms {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px;
+}
+.platform-tag {
+    padding: 3px 10px; border-radius: 16px; font-size: 0.75em;
+    background: rgba(108,92,231,0.12); color: var(--accent2); border: 1px solid rgba(108,92,231,0.25);
+}
+
+/* Tabs */
+.tabs {
+    display: flex; gap: 4px; margin-bottom: 16px; background: var(--card);
+    border-radius: 12px; padding: 3px; border: 1px solid var(--border);
+}
+.tab {
+    flex: 1; padding: 10px; text-align: center; border-radius: 10px;
+    cursor: pointer; transition: all 0.2s; font-size: 0.9em; color: var(--text2);
+}
+.tab.active { background: var(--accent); color: white; font-weight: 600; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 12px;
+}
+
+.input-group input, .input-group textarea {
+    width: 100%; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 16px; outline: none;
+    transition: border-color 0.2s;
+}
+.input-group input:focus, .input-group textarea:focus { border-color: var(--accent); }
+.input-group textarea { min-height: 120px; resize: vertical; font-family: inherit; }
+
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    font-size: 0.95em; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; color: white;
+}
+.btn-primary { background: linear-gradient(135deg, var(--accent), #8b7cf7); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; }
+.btn-success { background: var(--success); color: var(--bg); }
+.btn-group { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+.result-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; margin-top: 10px;
+    animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.result-card .title { font-weight: 600; margin-bottom: 6px; font-size: 1em; }
+.result-card .meta { color: var(--text2); font-size: 0.8em; margin-bottom: 10px; line-height: 1.6; }
+.result-card .actions { display: flex; flex-direction: column; gap: 6px; }
+.result-card .error-msg { color: var(--error); padding: 8px; background: rgba(255,107,107,0.1); border-radius: 8px; font-size: 0.85em; }
+
+.progress-bar {
+    width: 100%; height: 4px; background: var(--border); border-radius: 2px; margin-top: 10px; overflow: hidden;
+    display: none;
+}
+.progress-bar.active { display: block; }
+.progress-bar .fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px; transition: width 0.3s; width: 0%;
+}
+
+.status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 0.85em; display: none; }
+.status.info { display: block; background: rgba(108,92,231,0.1); color: var(--accent2); }
+.status.success { display: block; background: rgba(0,206,201,0.1); color: var(--success); }
+.status.error { display: block; background: rgba(255,107,107,0.1); color: var(--error); }
+
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.footer {
+    text-align: center; padding: 16px; color: var(--text2); font-size: 0.75em;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🎬 <span>视频下载器</span></h1>
+        <p>无水印视频下载 · 多平台支持</p>
+        <div class="platforms">
+            <span class="platform-tag">抖音</span>
+            <span class="platform-tag">B站</span>
+            <span class="platform-tag">小红书</span>
+            <span class="platform-tag">微博</span>
+            <span class="platform-tag">+1000站</span>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('single')">🔍 解析</div>
+        <div class="tab" onclick="switchTab('batch')">📋 批量</div>
+    </div>
+
+    <div id="panel-single" class="panel active">
+        <div class="card">
+            <div class="input-group">
+                <input type="text" id="single-url" placeholder="粘贴视频链接..." inputmode="url" />
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="parseSingle()" id="btn-parse">
+                    <span id="btn-parse-text">🔍 解析视频</span>
+                </button>
+            </div>
+            <div id="single-status" class="status"></div>
+            <div id="single-progress" class="progress-bar"><div class="fill"></div></div>
+            <div id="single-result"></div>
+        </div>
+    </div>
+
+    <div id="panel-batch" class="panel">
+        <div class="card">
+            <div class="input-group">
+                <textarea id="batch-text" placeholder="粘贴多个链接（每行一个）..."></textarea>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="parseBatch()" id="btn-batch">
+                    <span id="btn-batch-text">📋 批量解析</span>
+                </button>
+            </div>
+            <div id="batch-status" class="status"></div>
+            <div id="batch-progress" class="progress-bar"><div class="fill"></div></div>
+            <div id="batch-result"></div>
+        </div>
+    </div>
+</div>
+<div class="footer">🎬 视频下载器 v1.0 · 移动端</div>
+
+<script>
+const API = '';
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', ['single','batch'][i] === name);
+    });
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+}
+
+function setStatus(id, msg, type) {
+    const el = document.getElementById(id);
+    el.className = 'status ' + type;
+    el.textContent = msg;
+}
+function setProgress(id, pct) {
+    const bar = document.getElementById(id);
+    bar.classList.add('active');
+    bar.querySelector('.fill').style.width = pct + '%';
+}
+function hideProgress(id) { document.getElementById(id).classList.remove('active'); }
+
+async function parseSingle() {
+    const url = document.getElementById('single-url').value.trim();
+    if (!url) return setStatus('single-status', '请输入链接', 'error');
+    const btn = document.getElementById('btn-parse');
+    btn.disabled = true;
+    document.getElementById('btn-parse-text').innerHTML = '<span class="spinner"></span> 解析中...';
+    setStatus('single-status', '正在解析...', 'info');
+    setProgress('single-progress', 50);
+    document.getElementById('single-result').innerHTML = '';
+    try {
+        const resp = await fetch(API + '/api/parse', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url})
+        });
+        const data = await resp.json();
+        hideProgress('single-progress');
+        if (data.error) { setStatus('single-status', '❌ ' + data.error, 'error'); }
+        else { setStatus('single-status', '✅ 解析成功', 'success'); renderResult('single-result', data, url); }
+    } catch(e) { hideProgress('single-progress'); setStatus('single-status', '网络错误: ' + e.message, 'error'); }
+    finally { btn.disabled = false; document.getElementById('btn-parse-text').textContent = '🔍 解析视频'; }
+}
+
+async function parseBatch() {
+    const text = document.getElementById('batch-text').value.trim();
+    if (!text) return setStatus('batch-status', '请输入链接', 'error');
+    const btn = document.getElementById('btn-batch');
+    btn.disabled = true;
+    document.getElementById('btn-batch-text').innerHTML = '<span class="spinner"></span> 解析中...';
+    setStatus('batch-status', '正在批量解析...', 'info');
+    setProgress('batch-progress', 30);
+    document.getElementById('batch-result').innerHTML = '';
+    try {
+        const resp = await fetch(API + '/api/batch_parse', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text})
+        });
+        const data = await resp.json();
+        hideProgress('batch-progress');
+        if (data.error) { setStatus('batch-status', data.error, 'error'); }
+        else {
+            setStatus('batch-status', `✅ 共 ${data.total} 个链接`, 'success');
+            let html = '';
+            data.results.forEach((r, i) => { html += renderResultCard(r, r.url || '', i); });
+            document.getElementById('batch-result').innerHTML = html;
+        }
+    } catch(e) { hideProgress('batch-progress'); setStatus('batch-status', '网络错误: ' + e.message, 'error'); }
+    finally { btn.disabled = false; document.getElementById('btn-batch-text').textContent = '📋 批量解析'; }
+}
+
+function renderResult(id, data, url) { document.getElementById(id).innerHTML = renderResultCard(data, url, 0); }
+
+function renderResultCard(data, url, idx) {
+    if (data.error) return `<div class="result-card"><div class="title">❌ ${esc(data.parser||'未知')}</div><div class="meta">${esc(url)}</div><div class="error-msg">${esc(data.error)}</div></div>`;
+    let actions = '';
+    if (data.video_url) actions += `<button class="btn btn-success" onclick="doDownload('${esc(data.video_url)}','${esc(data.title)}','video',this)">⬇️ 下载视频</button>`;
+    if (data.audio_url) actions += `<button class="btn btn-primary" onclick="doDownload('${esc(data.audio_url)}','${esc(data.title)}','audio',this)">🎵 下载音频</button>`;
+    if (!data.video_url && !data.audio_url) actions = '<span style="color:var(--text2)">⚠️ 未找到可下载链接</span>';
+    return `<div class="result-card">
+        <div class="title">${esc(data.title||'未知')}</div>
+        <div class="meta">📱 ${esc(data.parser||data.platform||'')} ${data.author?'· 👤 '+esc(data.author):''}</div>
+        <div class="actions">${actions}</div>
+    </div>`;
+}
+
+async function doDownload(url, title, type, btn) {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> 下载中...';
+    try {
+        const resp = await fetch(API + '/api/download', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url, title, type})
+        });
+        if (!resp.ok) { const err = await resp.json(); alert('下载失败: ' + (err.error||'未知')); btn.textContent = orig; btn.disabled = false; return; }
+        const disp = resp.headers.get('Content-Disposition')||'';
+        const m = disp.match(/filename="?([^"]+)"?/);
+        const filename = m ? m[1] : (title + (type==='video'?'.mp4':'.m4a'));
+        const blob = await resp.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        btn.textContent = '✅ 完成';
+    } catch(e) { alert('错误: ' + e.message); btn.textContent = orig; }
+    finally { btn.disabled = false; }
+}
+
+function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+document.getElementById('single-url').addEventListener('keydown', e => { if (e.key==='Enter') parseSingle(); });
+</script>
+</body>
+</html>
