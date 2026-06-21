@@ -179,7 +179,11 @@ def batch_parse():
 
 @app.route("/api/download", methods=["POST"])
 def download_proxy():
-    data = request.get_json()
+    # 支持 JSON 和 form 两种提交方式
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
     media_url = data.get("url", "")
     title = data.get("title", f"video_{int(time.time())}")
     media_type = data.get("type", "video")

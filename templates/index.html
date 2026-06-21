@@ -261,35 +261,35 @@ async function doDownload(url, title, type, btn) {
     const orig = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 下载中...';
     try {
-        let blob;
-        let filename = title + (type==='video'?'.mp4':'.m4a');
-
         if (url.startsWith('blob:')) {
             // blob URL: 浏览器端直接 fetch
             const resp = await fetch(url);
             if (!resp.ok) throw new Error('无法获取 blob 数据');
-            blob = await resp.blob();
+            const blob = await resp.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = title + (type==='video'?'.mp4':'.m4a');
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
         } else {
-            // 普通 URL: 走后端代理下载
-            const resp = await fetch(API + '/api/download', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({url, title, type})
-            });
-            if (!resp.ok) { const err = await resp.json(); throw new Error(err.error||'下载失败'); }
-            const disp = resp.headers.get('Content-Disposition')||'';
-            const m = disp.match(/filename="?([^"]+)"?/);
-            if (m) filename = m[1];
-            blob = await resp.blob();
+            // 普通 URL: 用 form 提交，让 WebView 原生处理下载
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = API + '/api/download';
+            form.style.display = 'none';
+            const fields = {url: url, title: title, type: type};
+            for (const [k, v] of Object.entries(fields)) {
+                const input = document.createElement('input');
+                input.type = 'hidden'; input.name = k; input.value = v;
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+            setTimeout(() => document.body.removeChild(form), 1000);
         }
-
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-        btn.textContent = '✅ 完成';
+        btn.textContent = '✅ 下载中...';
     } catch(e) { alert('错误: ' + e.message); btn.textContent = orig; }
-    finally { btn.disabled = false; }
+    finally { setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 3000); }
 }
 
 function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }

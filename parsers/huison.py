@@ -46,6 +46,8 @@ class HuisonParser(BaseParser):
         }
         try:
             resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+            # 修复编码：优先用 apparent_encoding 检测
+            resp.encoding = resp.apparent_encoding or 'utf-8'
             html = resp.text
             return self._extract_from_html(html, params)
         except Exception:
@@ -55,6 +57,7 @@ class HuisonParser(BaseParser):
         """PC 页面解析"""
         try:
             resp = requests.get(url, headers=self.HEADERS, timeout=15)
+            resp.encoding = resp.apparent_encoding or 'utf-8'
             html = resp.text
             return self._extract_from_html(html, params)
         except Exception:
