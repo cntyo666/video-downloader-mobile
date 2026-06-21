@@ -121,6 +121,25 @@ def extract_urls(text: str) -> list:
 
 # ── 路由 ──────────────────────────────────────────────
 
+@app.route("/api/config")
+def app_config():
+    """APP 启动时拉取配置（热更新入口）"""
+    return jsonify({
+        "version": 2,
+        "min_app_version": "1.0",
+        "server_url": "https://video-downloader-mobile.onrender.com",
+        "features": {
+            "huison": True,
+            "douyin": True,
+            "kuaishou": True,
+            "bilibili": True,
+            "xiaohongshu": True,
+            "weibo": True,
+        },
+        "notice": "",
+    })
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
