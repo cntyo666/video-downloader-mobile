@@ -18,6 +18,7 @@ from parsers.douyin import DouyinParser
 from parsers.bilibili import BilibiliParser
 from parsers.xiaohongshu import XiaohongshuParser
 from parsers.weibo import WeiboParser
+from parsers.kuaishou import KuaishouParser
 from parsers.generic import GenericParser
 
 app = Flask(__name__)
@@ -36,6 +37,7 @@ PARSERS = [
     DouyinParser(),
     BilibiliParser(),
     XiaohongshuParser(),
+    KuaishouParser(),
     WeiboParser(),
     GenericParser(),
 ]
