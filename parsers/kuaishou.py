@@ -83,9 +83,9 @@ class KuaishouParser(BaseParser):
                 video_url = m.group(1).replace("\\u002F", "/")
                 break
 
-        # 降级：直接找 mp4 链接
+        # 降级：直接找 mp4 链接（排除 blob:）
         if not video_url:
-            mp4_urls = re.findall(r'(https?://[^"\s]+\.mp4[^"\s]*)', html)
+            mp4_urls = [u for u in re.findall(r'(https?://[^"\s]+\.mp4[^"\s]*)', html) if not u.startswith('blob:')]
             if mp4_urls:
                 # 优先选高清版（UltraV5 > HighV5 > 默认）
                 for u in mp4_urls:
